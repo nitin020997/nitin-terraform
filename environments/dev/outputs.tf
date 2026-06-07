@@ -12,3 +12,13 @@ output "private_subnet_ids" {
   description = "Private subnet IDs"
   value       = module.networking.private_subnet_ids
 }
+
+output "alb_dns_name" {
+  description = "ALB DNS name — use this to reach the app"
+  value       = module.compute.alb_dns_name
+}
+
+output "asg_name" {
+  description = "Auto Scaling Group name"
+  value       = module.compute.asg_name
+}
