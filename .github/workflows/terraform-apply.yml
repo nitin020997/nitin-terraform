@@ -6,17 +6,30 @@ on:
 
 permissions:
   contents: read
+  id-token: write # Required for OIDC authentication to AWS
 
 jobs:
-  # Dev: auto-apply on every merge — no approval needed
   apply-dev:
     name: Apply Dev
     runs-on: ubuntu-latest
-    environment: dev # Maps to GitHub environment (no protection rules)
+    environment: dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.CICD_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Assume Dev Deploy Role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.DEV_ACCOUNT_ID }}:role/TerraformDeployRole
+          aws-region: us-east-1
+          role-chaining: true # Chain from the OIDC role above
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -32,16 +45,29 @@ jobs:
         working-directory: environments/dev
         run: terraform apply -auto-approve
 
-  # Staging: requires 1 manual approval in GitHub environments
   apply-staging:
     name: Apply Staging
     runs-on: ubuntu-latest
-    environment: staging # GitHub environment with required reviewer
-    needs: apply-dev # Only runs if dev succeeded
+    environment: staging
+    needs: apply-dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.CICD_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Assume Staging Deploy Role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.STAGING_ACCOUNT_ID }}:role/TerraformDeployRole
+          aws-region: us-east-1
+          role-chaining: true
+          role-external-id: nitin-terraform-staging
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -57,12 +83,11 @@ jobs:
         working-directory: environments/staging
         run: terraform apply -auto-approve
 
-  # Prod: requires 2 manual approvals + only runs in change window (Mon-Fri 9-5 UTC)
   apply-prod:
     name: Apply Prod
     runs-on: ubuntu-latest
-    environment: prod # GitHub environment with 2 required reviewers
-    needs: apply-staging # Only runs if staging succeeded
+    environment: prod
+    needs: apply-staging
 
     steps:
       - name: Checkout
@@ -76,6 +101,20 @@ jobs:
             echo "ERROR: Prod deployments only allowed Mon-Fri 09:00-17:00 UTC"
             exit 1
           fi
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.CICD_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Assume Prod Deploy Role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.PROD_ACCOUNT_ID }}:role/TerraformDeployRole
+          aws-region: us-east-1
+          role-chaining: true
+          role-external-id: nitin-terraform-prod
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
