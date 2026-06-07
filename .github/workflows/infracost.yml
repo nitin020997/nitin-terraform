@@ -1,0 +1,92 @@
+name: Infracost Cost Estimation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  infracost:
+    name: Cost Impact Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Checkout base branch (to compare against)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # Generate cost breakdown for the BASE (what's deployed today)
+      - name: Generate base cost — dev
+        run: |
+          infracost breakdown \
+            --path base/environments/dev \
+            --terraform-var-file base/environments/dev/terraform.tfvars.example \
+            --format json \
+            --out-file /tmp/infracost-base-dev.json
+
+      - name: Generate base cost — staging
+        run: |
+          infracost breakdown \
+            --path base/environments/staging \
+            --format json \
+            --out-file /tmp/infracost-base-staging.json
+
+      - name: Generate base cost — prod
+        run: |
+          infracost breakdown \
+            --path base/environments/prod \
+            --format json \
+            --out-file /tmp/infracost-base-prod.json
+
+      # Generate cost breakdown for the PR (what this change costs)
+      - name: Generate PR cost — dev
+        run: |
+          infracost breakdown \
+            --path environments/dev \
+            --format json \
+            --out-file /tmp/infracost-pr-dev.json
+
+      - name: Generate PR cost — staging
+        run: |
+          infracost breakdown \
+            --path environments/staging \
+            --format json \
+            --out-file /tmp/infracost-pr-staging.json
+
+      - name: Generate PR cost — prod
+        run: |
+          infracost breakdown \
+            --path environments/prod \
+            --format json \
+            --out-file /tmp/infracost-pr-prod.json
+
+      # Diff: show ONLY what changed
+      - name: Generate cost diff
+        run: |
+          infracost diff \
+            --path /tmp/infracost-pr-prod.json \
+            --compare-to /tmp/infracost-base-prod.json \
+            --format json \
+            --out-file /tmp/infracost-diff.json
+
+      # Post a single comment with cost impact for all environments
+      - name: Post cost comment on PR
+        uses: infracost/actions/comment@v3
+        with:
+          path: /tmp/infracost-diff.json
+          behavior: update
+          # behavior: update = edit the existing comment instead of posting a new one
+          # This keeps PR comments clean — one cost comment, always current
