@@ -1,0 +1,28 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Sensitive files - NEVER commit these
+*.tfvars
+!*.tfvars.example
+.env
+*.pem
+*.key
+
+# LocalStack
+.localstack/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
