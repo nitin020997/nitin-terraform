@@ -16,7 +16,7 @@ terraform {
     organization = "nitin-terraform"
 
     workspaces {
-      name = "nitin-terraform-dev"
+      name = "nitin-terraform-prod"
     }
   }
 }

@@ -1,0 +1,92 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # Dev: auto-apply on every merge — no approval needed
+  apply-dev:
+    name: Apply Dev
+    runs-on: ubuntu-latest
+    environment: dev # Maps to GitHub environment (no protection rules)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.6"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init
+        working-directory: environments/dev
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: environments/dev
+        run: terraform apply -auto-approve
+
+  # Staging: requires 1 manual approval in GitHub environments
+  apply-staging:
+    name: Apply Staging
+    runs-on: ubuntu-latest
+    environment: staging # GitHub environment with required reviewer
+    needs: apply-dev # Only runs if dev succeeded
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.6"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init
+        working-directory: environments/staging
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: environments/staging
+        run: terraform apply -auto-approve
+
+  # Prod: requires 2 manual approvals + only runs in change window (Mon-Fri 9-5 UTC)
+  apply-prod:
+    name: Apply Prod
+    runs-on: ubuntu-latest
+    environment: prod # GitHub environment with 2 required reviewers
+    needs: apply-staging # Only runs if staging succeeded
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check change window
+        run: |
+          HOUR=$(date -u +%H)
+          DAY=$(date -u +%u)
+          if [ "$DAY" -gt 5 ] || [ "$HOUR" -lt 9 ] || [ "$HOUR" -ge 17 ]; then
+            echo "ERROR: Prod deployments only allowed Mon-Fri 09:00-17:00 UTC"
+            exit 1
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.6"
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init
+        working-directory: environments/prod
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: environments/prod
+        run: terraform apply -auto-approve
