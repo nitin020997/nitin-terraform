@@ -1,0 +1,38 @@
+name: Module Tests
+
+on:
+  pull_request:
+    paths:
+      - "modules/**"
+
+jobs:
+  test:
+    name: Terratest
+    runs-on: ubuntu-latest
+
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: ec2,s3,iam,sts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "~1.21"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.6"
+
+      - name: Run module tests
+        working-directory: tests
+        run: go test ./... -v -timeout 15m
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
